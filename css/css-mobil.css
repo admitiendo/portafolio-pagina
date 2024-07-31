@@ -1,0 +1,58 @@
+@media (max-width: 1200px) {
+
+    #loading-text {
+        color: #fff;
+        font-size: 14px;
+        font-weight: 800;
+        font-family: "Raleway", sans-serif;
+    }
+
+    .title h2 {
+        font-size: 14px;
+        font-weight: 500;
+        padding: 0;
+        line-height: 1px;
+        margin: 0 0 20px 0;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #aaaaaa;
+        text-align: center;
+        font-family: "Poppins", sans-serif;
+    }
+
+    .title p {
+        margin: -15px 0 15px 0;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-family: "Poppins", sans-serif;
+        color: #fff;
+    }
+
+    .me .content h3 {
+        font-weight: 600;
+        font-size: 22px;
+        font-family: "Poppins", sans-serif;
+        color: #ff6a77;
+    }
+
+    .me .content{
+        color: white;
+        font-weight: 500;
+        font-size: 16px;
+        font-family: "Poppins", sans-serif;
+    }
+
+    .me .tip{
+        font-size: 12px;
+        font-weight: 500;
+        font-family: "Poppins", sans-serif;
+    }
+    .servers .info-box img {
+        border-radius: 30px;
+        width: 100px;
+        padding: 14px;
+        float: left;
+    }
+}
