@@ -32,7 +32,7 @@ jobs:
           
           # Detecta automáticamente tu nombre de usuario de GitHub
           USERNAME = '${{ github.repository_owner }}'
-          FILE_PATH = 'api/commit-history.json'
+          FILE_PATH = 'widget-api.json'
           
           # Endpoint de búsqueda para contar todos los commits del autor
           url = f'https://api.github.com/search/commits?q=author:{USERNAME}'
