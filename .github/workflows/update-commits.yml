@@ -26,7 +26,7 @@ jobs:
       - name: Obtener datos de GitHub y actualizar JSON
         env:
           # Tu Personal Access Token (PAT) guardado en los Secrets de tu repositorio
-          GH_TOKEN: ${{ secrets.COLECCION_COMMITS }}
+          GH_TOKEN: ${{ secrets.READALL_KEY }}
         run: |
           python -c "
           import os, json, requests
