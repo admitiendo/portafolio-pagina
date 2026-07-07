@@ -1,12 +1,12 @@
-name: Update Widget Data
+name: Update GitHub Stats and Discord Widget
 
 on:
   schedule:
-    - cron: '0 * * * *' # Se ejecuta automáticamente todos los días a la medianoche (UTC)
-  workflow_dispatch: # Permite ejecución manual desde la pestaña Actions de tu repositorio
+    - cron: '0 */6 * * *' # Cambia esto al tiempo X que prefieras (ej: cada 6 horas)
+  workflow_dispatch: # Permite ejecución manual
 
 permissions:
-  contents: write # Permiso necesario para que el bot de GitHub pueda modificar y guardar el JSON
+  contents: write
 
 jobs:
   refresh-widget-api:
@@ -23,10 +23,13 @@ jobs:
       - name: Instalar dependencias
         run: pip install requests
 
-      - name: Obtener datos de GitHub y actualizar JSON
+      - name: Obtener datos de GitHub y actualizar JSON y Discord
         env:
-          # Tu Personal Access Token (PAT) guardado en los Secrets de tu repositorio
           GH_TOKEN: ${{ secrets.READALL_KEY }}
+          # NUEVOS SECRETS PARA DISCORD:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_APP_ID: ${{ secrets.DISCORD_APP_ID }}
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
         run: |
           python -c "
           import os, json, requests
@@ -35,14 +38,14 @@ jobs:
           USERNAME = '${{ github.repository_owner }}'
           FILE_PATH = 'widget-api.json'
           
-          headers = {
+          headers_gh = {
               'Accept': 'application/vnd.github+json',
               'Authorization': f'Bearer {os.environ[\"GH_TOKEN\"]}'
           }
           
           # 1. Obtener total de commits y último commit
           url_commits = f'https://api.github.com/search/commits?q=author:{USERNAME}&sort=author-date&order=desc&per_page=1'
-          res_commits = requests.get(url_commits, headers=headers)
+          res_commits = requests.get(url_commits, headers=headers_gh)
           
           total_commits = 0
           latest_commit_millis = 0
@@ -54,34 +57,22 @@ jobs:
               items = data_c.get('items', [])
               if items:
                   commit_date_str = items[0]['commit']['author']['date']
-                  # Reemplazar la zona horaria 'Z' por el formato ISO estándar compatible con Python
                   if commit_date_str.endswith('Z'):
                       commit_date_str = commit_date_str.replace('Z', '+00:00')
                   dt = datetime.fromisoformat(commit_date_str)
-                  
-                  # Tiempo en Milisegundos
                   latest_commit_millis = int(dt.timestamp() * 1000)
-                  
-                  # Formato exacto requerido: DD/MM/YY : HH:MIN:SS
                   latest_commit_readable = dt.strftime('%d/%m/%y : %H:%M:%S')
-          else:
-              print(f'Error en API de Commits: {res_commits.status_code}', res_commits.text)
           
-          # 2. Obtener repositorios totales (Públicos + Privados)
+          # 2. Obtener repositorios totales
           url_user = 'https://api.github.com/user'
-          res_user = requests.get(url_user, headers=headers)
+          res_user = requests.get(url_user, headers=headers_gh)
           
           total_repos = 0
           if res_user.status_code == 200:
               data_u = res_user.json()
-              pub_repos = data_u.get('public_repos', 0)
-              priv_repos = data_u.get('total_private_repos', 0)
-              total_repos = pub_repos + priv_repos
-          else:
-              print(f'Error en API de Usuario: {res_user.status_code}', res_user.text)
-              exit(1)
+              total_repos = data_u.get('public_repos', 0) + data_u.get('total_private_repos', 0)
           
-          # 3. Leer y actualizar widget-api.json existente
+          # 3. Guardar en el archivo JSON local (Como respaldo/Portafolio)
           if os.path.exists(FILE_PATH):
               with open(FILE_PATH, 'r', encoding='utf-8') as f:
                   try: data = json.load(f)
@@ -89,7 +80,6 @@ jobs:
           else:
               data = {}
           
-          # Inyección limpia de los nuevos valores sin destruir los existentes
           data['total_commits'] = total_commits
           data['latest_commit_ms'] = latest_commit_millis
           data['latest_commit_date'] = latest_commit_readable
@@ -98,7 +88,38 @@ jobs:
           with open(FILE_PATH, 'w', encoding='utf-8') as f:
               json.dump(data, f, indent=2, ensure_ascii=False)
           
-          print(f'Datos actualizados: Commits={total_commits}, Repos={total_repos}, Fecha={latest_commit_readable}')
+          # 4. INTEGRACIÓN DIRECTA CON EL WIDGET DE DISCORD
+          app_id = os.environ.get('DISCORD_APP_ID')
+          user_id = os.environ.get('DISCORD_USER_ID')
+          bot_token = os.environ.get('DISCORD_BOT_TOKEN')
+          
+          if app_id and user_id and bot_token:
+              discord_url = f'https://discord.com/api/v9/applications/{app_id}/users/{user_id}/identities/0/profile'
+              discord_headers = {
+                  'Content-Type': 'application/json',
+                  'Authorization': f'Bot {bot_token}',
+                  'User-Agent': 'DiscordBot (https://github.com/discord/discord-api-docs, 1.0.0)'
+              }
+              
+              # Aquí mapeamos tus datos de GitHub organizados en la estructura dinámica de Discord
+              discord_body = {
+                  'username': 'admitiendo',
+                  'data': {
+                      'dynamic': [
+                          {'type': 1, 'name': 'Total Commits', 'value': str(total_commits)},
+                          {'type': 1, 'name': 'Repositories', 'value': str(total_repos)},
+                          {'type': 1, 'name': 'Last Commit', 'value': latest_commit_readable}
+                      ]
+                  }
+              }
+              
+              res_dc = requests.patch(discord_url, headers=discord_headers, json=discord_body)
+              if res_dc.status_code in [200, 204]:
+                  print('¡Widget de perfil de Discord actualizado con éxito!')
+              else:
+                  print(f'Error al actualizar Discord ({res_dc.status_code}): {res_dc.text}')
+          else:
+              print('Faltan variables de Discord en los Secrets. Saltando actualización de perfil.')
           "
 
       - name: Confirmar y subir cambios al repositorio
@@ -106,6 +127,5 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add widget-api.json
-          # Solo realiza el commit si el archivo realmente cambió de valor
-          git diff-index --quiet HEAD || git commit -m '🤖 Auto-update: GitHub statistics for profile widget'
+          git diff-index --quiet HEAD || git commit -m '🤖 Auto-update: GitHub statistics'
           git push
