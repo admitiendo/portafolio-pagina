@@ -1,0 +1,78 @@
+name: Update Total Commits Count
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Se ejecuta automáticamente todos los días a la medianoche (UTC)
+  workflow_dispatch: # Te permite ejecutarlo manualmente desde la pestaña "Actions" de GitHub
+
+permissions:
+  contents: write # Permiso crucial para que el bot pueda guardar los cambios en tu repo
+
+jobs:
+  refresh-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Obtener commits y actualizar JSON
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -c "
+          import os, json, requests
+          
+          # Detecta automáticamente tu nombre de usuario de GitHub
+          USERNAME = '${{ github.repository_owner }}'
+          FILE_PATH = 'api/commit-history.json'
+          
+          # Endpoint de búsqueda para contar todos los commits del autor
+          url = f'https://api.github.com/search/commits?q=author:{USERNAME}'
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {os.environ[\"GH_TOKEN\"]}'
+          }
+          
+          response = requests.get(url, headers=headers)
+          if response.status_code == 200:
+              total_commits = response.json().get('total_count', 0)
+          else:
+              print(f'Error en la API de GitHub: {response.status_code}', response.text)
+              exit(1)
+          
+          # Leer el archivo JSON existente para no borrar tus otros datos (skills, status, etc.)
+          if os.path.exists(FILE_PATH):
+              with open(FILE_PATH, 'r') as f:
+                  try:
+                      data = json.load(f)
+                  except json.JSONDecodeError:
+                      data = {}
+          else:
+              data = {}
+          
+          # Inyectar o actualizar el campo de los commits
+          data['total_commits'] = total_commits
+          
+          # Guardar los cambios manteniendo el formato limpio
+          with open(FILE_PATH, 'w') as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+              
+          print(f'Monto total de commits actualizado: {total_commits}')
+          "
+
+      - name: Confirmar y subir cambios al repositorio
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add widget-api.json
+          # Solo hace push si el número cambió, evitando commits vacíos innecesarios
+          git diff-index --quiet HEAD || git commit -m '🤖 Auto-update: Total commits count'
+          git push
